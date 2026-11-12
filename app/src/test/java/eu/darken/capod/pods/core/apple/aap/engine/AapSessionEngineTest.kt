@@ -446,6 +446,28 @@ class AapSessionEngineTest : BaseTest() {
         }
 
         @Test
+        fun `DISCONNECTED clears a previously known battery slot`() {
+            val case = AapPodState.BatteryType.CASE
+            val profile = mockProfile {
+                every { decodeStemPress(any()) } returns null
+                every { decodeBattery(any()) } returnsMany listOf(
+                    mapOf(case to AapPodState.Battery(case, 0.10f, AapPodState.ChargingState.NOT_CHARGING)),
+                    mapOf(case to AapPodState.Battery(case, 0f, AapPodState.ChargingState.DISCONNECTED)),
+                )
+            }
+            val engine = AapSessionEngine(profile, timeSource)
+            val scope = TestScope(UnconfinedTestDispatcher())
+            engine.start(scope)
+            engine.onHandshakeSent()
+
+            engine.processMessage(dummyMessage())
+            engine.state.value.batteryCase shouldBe 0.10f
+
+            engine.processMessage(dummyMessage())
+            engine.state.value.batteryCase.shouldBeNull() // stale 10% must not stick
+        }
+
+        @Test
         fun `decoded battery message transitions HANDSHAKING to READY`() {
             val profile = mockProfile {
                 every { decodeBattery(any()) } returns mapOf(

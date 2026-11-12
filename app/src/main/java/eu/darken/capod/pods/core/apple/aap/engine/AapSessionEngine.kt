@@ -236,11 +236,13 @@ internal class AapSessionEngine(
             }
 
             is AapInboundUpdate.Battery -> {
-                val valid = update.batteries.filterValues {
-                    it.charging != AapPodState.ChargingState.DISCONNECTED
+                // DISCONNECTED (e.g. the case while the pods are out) means "no reading": drop the
+                // slot so a stale value doesn't outrank live BLE data in PodDevice.
+                val (gone, valid) = update.batteries.entries.partition {
+                    it.value.charging == AapPodState.ChargingState.DISCONNECTED
                 }
                 _state.value = _state.value.copy(
-                    batteries = _state.value.batteries + valid,
+                    batteries = _state.value.batteries - gone.map { it.key }.toSet() + valid.associate { it.toPair() },
                     lastMessageAt = timeSource.now(),
                 )
                 log(TAG) {
